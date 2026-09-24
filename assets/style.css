@@ -39,13 +39,21 @@ body {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
   font-size: 16px;
   font-weight: bold;
   color: #ffffff;
   letter-spacing: .3px;
 }
 
-.brand span { color: #6aa9e0; }
+/* The wordmark, drawn at a size that sits inside the 46px bar.  It is a
+   little over 3:1, so the height is what decides the width. */
+.brand img {
+  display: block;
+  height: 28px;
+  width: auto;
+}
 
 .nav { display: flex; gap: 2px; }
 

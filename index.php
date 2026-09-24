@@ -11,7 +11,7 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">Mini<span>Ball</span></div>
+  <div class="brand"><img src="assets/mb-logo.png" alt="MiniBall"></div>
   <nav class="nav">
     <a href="#" class="active">Play</a>
     <a href="#" id="helpLink">Controls</a>
