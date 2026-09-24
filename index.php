@@ -6,7 +6,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>MiniBall</title>
 <link rel="stylesheet" href="assets/style.css">
-<link rel="icon" type="image/x-icon" href="assets/1099672.png">
+<link rel="icon" type="image/x-icon" href="assets/mb-favi.png">
 </head>
 <body>
 
