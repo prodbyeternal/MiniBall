@@ -994,13 +994,17 @@ async function testAdmins() {
     adminOf(host, 'Guest') === false && adminOf(host, 'Third') === false);
 
   // A player with no rights can ask for anything they like; nothing happens.
-  guest.send({ type: 'admin', action: 'move', id: thirdId, team: 'red' });
+  // They are asked to move to a column they are not in, so an ignored request
+  // and a granted one look different.
+  const before = teamOf(host, 'Third');
+  const elsewhere = before === 'red' ? 'blue' : 'red';
+  guest.send({ type: 'admin', action: 'move', id: thirdId, team: elsewhere });
   guest.send({ type: 'admin', action: 'admin', id: thirdId, admin: true });
   guest.send({ type: 'admin', action: 'kick', id: hostId });
   await sleep(400);
   check('a player without admin rights can move nobody',
-    teamOf(host, 'Third') !== 'red' || teamOf(host, 'Third') === 'red' && !adminOf(host, 'Third'),
-    'Third is ' + teamOf(host, 'Third') + ', admin=' + adminOf(host, 'Third'));
+    teamOf(host, 'Third') === before,
+    'Third is ' + teamOf(host, 'Third') + ', asked for ' + elsewhere);
   check('a player without admin rights cannot promote anyone', adminOf(host, 'Third') === false);
   check('a player without admin rights cannot kick the host',
     host.room.players.length === 3 && host.ws.readyState === WebSocket.OPEN);

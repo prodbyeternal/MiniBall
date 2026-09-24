@@ -12,6 +12,8 @@
  * ===================================================================== */
 
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const WebSocket = require('ws');
 
 const PORT = Number(process.env.PORT) || 8080;
@@ -1668,9 +1670,94 @@ function handleChat(ws, msg) {
  *  HTTP + WebSocket wiring
  * ===================================================================== */
 
+/* The site and the game are served from one port.  A host like Railway hands
+   an application a single public port, so a page that fetched its socket from
+   a second one would have nothing to talk to; here the page, its assets and
+   the WebSocket all arrive on the same origin.
+
+   XAMPP can still serve index.php through Apache on port 80 instead — the
+   page works out which of the two it is (see index.php) — but nothing about
+   the game needs it. */
+const WEB_ROOT = __dirname;
+
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.php': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+};
+
+// The server's own source, its test harness and its modules are nobody's
+// business over HTTP.
+const PRIVATE = new Set(['server.js', '_smoke.js', 'package.json', 'package-lock.json', 'node_modules', '.git']);
+
+/* This project has exactly two lines of PHP, and they only decide what a new
+   visitor is called.  Rather than drag a PHP runtime into the image, any line
+   carrying PHP is dropped whole — the page stays valid HTML and valid
+   JavaScript, and the client names itself instead (see getNick, which has to
+   cope with window.PLAYER_NICK never being set).  Everything else is served
+   as it sits on disk. */
+function renderPhp(source) {
+  return source.split('\n').filter(line => !/<\?(?:php|=)/.test(line)).join('\n');
+}
+
+function serveFile(req, res, pathname) {
+  const wanted = pathname === '/' ? '/index.php' : pathname;
+  let decoded;
+  try { decoded = decodeURIComponent(wanted); } catch (e) { decoded = ''; }
+
+  const relative = decoded.replace(/^\/+/, '');
+  const parts = relative.split('/');
+  if (!relative || parts.some(p => p === '' || p === '..' || p.startsWith('.'))) {
+    return notFound(res);
+  }
+  if (PRIVATE.has(parts[0])) return notFound(res);
+
+  const ext = path.extname(parts[parts.length - 1]).toLowerCase();
+  if (!MIME[ext]) return notFound(res);
+
+  const file = path.join(WEB_ROOT, ...parts);
+  // Belt and braces: whatever the path looked like, it has to land inside the
+  // project folder.
+  if (!file.startsWith(WEB_ROOT + path.sep)) return notFound(res);
+
+  fs.readFile(file, (err, buffer) => {
+    if (err) return notFound(res);
+    const body = ext === '.php' ? Buffer.from(renderPhp(buffer.toString('utf8')), 'utf8') : buffer;
+    res.writeHead(200, {
+      'Content-Type': MIME[ext],
+      'Content-Length': body.length,
+      // The page and its assets change whenever the project is deployed, and
+      // a stale game.js against a new server is a miserable thing to debug.
+      'Cache-Control': 'no-cache',
+    });
+    res.end(req.method === 'HEAD' ? undefined : body);
+  });
+}
+
+function notFound(res) {
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Not found');
+}
+
 const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-  res.end('MiniBall server running. Rooms: ' + rooms.size);
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { 'Content-Type': 'text/plain; charset=utf-8', Allow: 'GET, HEAD' });
+    res.end('Method not allowed');
+    return;
+  }
+  let pathname;
+  try { pathname = new URL(req.url, 'http://localhost').pathname; } catch (e) { pathname = '/'; }
+  serveFile(req, res, pathname);
 });
 
 // A join or create message carries the player's ball image, so the frame

@@ -257,7 +257,11 @@
   function getNick() {
     var stored = '';
     try { stored = localStorage.getItem(NICK_KEY) || ''; } catch (e) { stored = ''; }
-    return (stored || window.PLAYER_NICK || 'Player').slice(0, 16);
+    // PLAYER_NICK comes from the PHP session when the page is served by
+    // Apache; the node server has no PHP and leaves it out, so a name of its
+    // own has to be invented rather than everyone sharing "Player".
+    var seeded = window.PLAYER_NICK || ('Player' + (100 + Math.floor(Math.random() * 900)));
+    return (stored || seeded).slice(0, 16);
   }
 
   function setNick(value) {

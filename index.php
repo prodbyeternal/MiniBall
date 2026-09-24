@@ -1,10 +1,4 @@
-<?php
-session_start();
-if (!isset($_SESSION['nick'])) {
-    $_SESSION['nick'] = 'Player' . rand(100, 999);
-}
-$initialNick = substr($_SESSION['nick'], 0, 16);
-?>
+<?php session_start(); if (!isset($_SESSION['nick'])) { $_SESSION['nick'] = 'Player' . rand(100, 999); } ?>
 <!doctype html>
 <html lang="en">
 <head>
@@ -361,9 +355,24 @@ $initialNick = substr($_SESSION['nick'], 0, 16);
 
 <div id="toast" class="toast hidden"></div>
 
+<!-- The name PHP hands over, taken from the session.  A host without PHP (the
+     node server, see renderPhp) drops this line whole and the client names
+     itself instead — getNick copes either way. -->
+<?php echo '<script>window.PLAYER_NICK = ' . json_encode(substr($_SESSION['nick'], 0, 16)) . ';</script>'; ?>
+
 <script>
-window.PLAYER_NICK = <?= json_encode($initialNick) ?>;
-window.GAME_SERVER = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8080';
+// Where the game server is.  Two shapes of deployment have to work:
+//   * a host that gives the app one port (Railway, Fly, any HTTPS host) —
+//     the page and the socket share an origin, so wss://<host> with no port;
+//   * XAMPP, where Apache serves this page on 80 and node runs on 8080.
+// A port that is neither 80 nor 8080 means the page itself came from the
+// node server, so its own origin is the socket.
+(function () {
+  var port = location.port;
+  var sameOrigin = location.protocol === 'https:' || (port !== '' && port !== '80' && port !== '8080');
+  window.GAME_SERVER = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname
+    + (sameOrigin ? (port ? ':' + port : '') : ':8080');
+})();
 </script>
 <script src="assets/game.js"></script>
 </body>

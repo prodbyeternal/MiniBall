@@ -13,6 +13,8 @@ haxball_multiplayer/
   index.php
   package.json
   server.js
+  Dockerfile
+  railway.json
   assets/
     style.css
     game.js
@@ -70,6 +72,41 @@ INTERNET
 - port TCP 8080 musi być dostępny,
 - router/firewall musi przekazywać port 8080 na komputer z Node.js,
 - przy hostingu VPS można uruchomić Node.js bez przekierowania domowego routera.
+
+HOSTING Z JEDNYM PORTEM (RAILWAY, FLY, RENDER…)
+-----------------------------------------------
+Taki hosting daje aplikacji JEDEN publiczny port (w zmiennej PORT). Dwie
+rzeczy na dwóch portach się tam nie zmieszczą: strona i gra muszą iść tym
+samym portem, inaczej strona nie ma się z czym połączyć.
+
+Dlatego node serwuje teraz także samą stronę, obok WebSocketu:
+
+  /                -> index.php (bez PHP — patrz niżej)
+  /assets/*.css|js -> pliki gry
+  WebSocket        -> ten sam port
+
+Wdrożenie na Railway:
+1. Wrzuć projekt na GitHub i podłącz repo jako nowy projekt w Railway.
+2. Railway wykryje Dockerfile (albo ustaw go ręcznie w railway.json).
+3. Nie ustawiaj PORT ręcznie — Railway robi to sam.
+4. Wygeneruj domenę (Settings -> Networking -> Generate Domain) i wejdź na
+   nią. Strona i gra są pod tym samym adresem, po wss:// (TLS kończy Railway).
+
+Nie stawiaj już FrankenPHP/Apache przed tym projektem — jeśli PHP zajmuje
+PORT, node nie może go wziąć i WebSocket nie wstanie (dokładnie ten błąd:
+"8080 to FrankenPHP"). Na hostingu PHP nie jest do niczego potrzebny: strona
+używa go tylko do wygenerowania nicku, a gdy PHP nie ma, nick wymyśla sobie
+klient i zapisuje go w localStorage (patrz getNick w assets/game.js). Plik
+index.php zostaje w projekcie dla XAMPP-a.
+
+XAMPP nadal działa jak dawniej: Apache na porcie 80 (albo 443) oddaje stronę,
+a node na 8080 prowadzi grę. Strona sama rozpoznaje, który to przypadek —
+po HTTPS bierze własne origin, po HTTP poza portami 80 i 8080 również, a po
+HTTP na 80/8080-ku wraca do 8080. Żeby zmienić adres gry na sztywno, ustaw
+window.GAME_SERVER w index.php.
+
+Node na serwerze bez PHP nie oddaje też server.js, node_modules ani
+package.json — te pliki nie są do niczego w przeglądarce potrzebne.
 
 BEZPIECZEŃSTWO / ARCHITEKTURA
 -----------------------------
