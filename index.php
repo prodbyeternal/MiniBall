@@ -308,6 +308,10 @@
         <select id="sBgTheme"></select>
       </label>
       <label class="srow">
+        <span>Touch controls <i>(thumbstick and kick button on the pitch)</i></span>
+        <select id="sTouch"></select>
+      </label>
+      <label class="srow">
         <span>Grass stripes</span>
         <input type="checkbox" id="sStripes">
       </label>

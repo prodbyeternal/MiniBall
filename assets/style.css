@@ -338,6 +338,21 @@ body.bg-classic .room {
   display: block;
 }
 
+/* With the on-screen controls out, the pitch has to stop behaving like a web
+   page: no scrolling, no double-tap zoom, no long-press callout or selection
+   under a thumb.  Only while they are showing, so the rest of the site keeps
+   its ordinary pinch and zoom. */
+body.touch-ui #pitch {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Pull-to-refresh would fire the moment a thumb dragged down the pitch. */
+body.touch-ui { overscroll-behavior: none; }
+
 /* --------------------------- in-game chrome -------------------------- */
 
 .game-ui {

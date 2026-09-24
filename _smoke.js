@@ -3,6 +3,8 @@
 
 const WebSocket = require('ws');
 const { spawn } = require('child_process');
+const fs = require('fs');
+const path = require('path');
 
 // Reassigned by the ban suite, which runs against a server of its own.
 let URL = 'ws://localhost:8080';
@@ -961,6 +963,110 @@ async function testAvatars() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  The on-screen controls                                              */
+/* ------------------------------------------------------------------ */
+
+/* Nothing here needs a server: the touch block is lifted out of game.js and
+   driven with made-up pointer events, because a thumb is the one thing a
+   test in a terminal cannot have.  It closes over only what the real block
+   reaches for, so what runs is the shipping code, not a copy of it. */
+function testTouchControls() {
+  console.log('\n--- touch controls ---');
+
+  const source = fs.readFileSync(path.join(__dirname, 'assets/game.js'), 'utf8');
+  const start = source.indexOf('  var touchKeys = {');
+  const end = source.indexOf('   *  Canvas geometry');
+  if (start < 0 || end < 0) {
+    check('the touch block can be found in game.js', false, 'markers moved — update this suite');
+    return;
+  }
+  const block = source.slice(start, source.lastIndexOf('/*', end));
+
+  const body = { classes: {}, classList: { toggle: (c, on) => { body.classes[c] = !!on; } } };
+  const sandbox = {
+    settings: { touch: 'auto' },
+    cw: 800, ch: 400,
+    canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }), setPointerCapture() {} },
+    document: { body },
+    window: { matchMedia: () => ({ matches: false }) },
+    inGame: () => true,
+    pumpInput: () => {},
+    Math,
+  };
+
+  const api = new Function('sandbox', `with (sandbox) { ${block}
+    // Declared in here so it closes over the real touchKeys, the way the
+    // readKeys in game.js does.
+    sandbox.readKeys = function () {
+      return { up: touchKeys.up, down: touchKeys.down, left: touchKeys.left,
+               right: touchKeys.right, kick: touchKeys.kick };
+    };
+    return { touchKeys, controlStart, controlMove, controlEnd, releaseTouches,
+             touchWanted, applyTouchMode,
+             get stick() { return stick; }, get kickTouch() { return kickTouch; } };
+  }`)(sandbox);
+
+  const ev = (id, type, x, y) => ({ pointerId: id, pointerType: type, clientX: x, clientY: y, preventDefault() {} });
+  const held = () => ['up', 'down', 'left', 'right'].filter(k => api.touchKeys[k]).join('+') || '-';
+  const R = 58;   // the stick radius the block uses
+
+  check('with nobody touching it, a mouse is not given a thumbstick', !api.touchWanted());
+  api.controlStart(ev(1, 'mouse', 100, 300));
+  check('a mouse press does not grab the stick', api.stick.id === null && held() === '-');
+
+  api.controlStart(ev(1, 'touch', 100, 300));
+  check('the first finger brings the controls out',
+    api.touchWanted() && body.classes['touch-ui'] === true);
+  check('and that finger owns the stick', api.stick.id === 1);
+
+  api.controlMove(ev(1, 'touch', 100 + R, 300));
+  check('pushed right reads as right', held() === 'right', held());
+  api.controlMove(ev(1, 'touch', 100, 300 - R));
+  check('pushed up reads as up', held() === 'up', held());
+  api.controlMove(ev(1, 'touch', 100 + 41, 300 - 41));
+  check('a diagonal is two directions at once', held() === 'up+right', held());
+  api.controlMove(ev(1, 'touch', 100 + 300, 300 + 300));
+  check('a thumb dragged off the canvas still steers', held() === 'down+right', held());
+  api.controlMove(ev(1, 'touch', 100 + 6, 300));
+  check('and a thumb near the middle lets go', held() === '-', held());
+
+  // Two fingers is the whole reason this exists: steering and kicking at once.
+  api.controlMove(ev(1, 'touch', 100 - R, 300));
+  api.controlStart(ev(2, 'touch', 700, 300));
+  check('a second finger kicks', api.touchKeys.kick === true && api.kickTouch.id === 2);
+  check('while the first is still steering', held() === 'left' && api.touchKeys.kick, held());
+
+  api.controlEnd(ev(2, 'touch', 700, 300));
+  check('lifting the kicking finger stops the kick', api.touchKeys.kick === false);
+  check('and leaves the steering alone', held() === 'left', held());
+  api.controlEnd(ev(1, 'touch', 100, 300));
+  check('lifting the steering finger stops that', held() === '-', held());
+
+  api.controlStart(ev(1, 'touch', 100, 300));
+  api.controlMove(ev(9, 'touch', 700, 300));
+  check('a pointer that owns nothing cannot move the stick', held() === '-', held());
+  check('and cannot make it kick', api.kickTouch.id === null);
+  api.controlEnd(ev(1, 'touch', 100, 300));
+
+  sandbox.settings.touch = 'off';
+  api.applyTouchMode();
+  check('turning them off retires the controls', !api.touchWanted());
+  api.controlStart(ev(3, 'touch', 100, 300));
+  check('and then a finger no longer grabs the stick', api.stick.id === null);
+  sandbox.settings.touch = 'on';
+  api.applyTouchMode();
+  check('turning them on shows them with no finger at all',
+    api.touchWanted() && body.classes['touch-ui'] === true);
+
+  api.controlStart(ev(4, 'touch', 100, 300));
+  api.controlMove(ev(4, 'touch', 100 - R, 300));
+  api.controlStart(ev(5, 'touch', 700, 300));
+  api.releaseTouches();
+  check('when the app goes away the player does not run on by themselves',
+    held() === '-' && api.stick.id === null && api.kickTouch.id === null, held());
+}
+
+/* ------------------------------------------------------------------ */
 /*  Admin rights: promote, demote, move, kick, and who may not at all   */
 /* ------------------------------------------------------------------ */
 
@@ -1141,6 +1247,8 @@ async function main() {
   // `node _smoke.js goals` runs one suite while working on it.
   const only = (process.argv[2] || '').toLowerCase();
   const suites = [
+    // The only one that needs no server: it drives the client's own code.
+    ['touch', testTouchControls],
     ['physics', testPhysics],
     ['lobby', testLobby],
     ['room', testRoomPanel],

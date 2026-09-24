@@ -128,6 +128,7 @@
     inGameChat: true,       // visual
     stripes: true,          // visual: mown grass
     bgTheme: 'wash',        // visual: the backdrop behind the room panel
+    touch: 'auto',          // visual: on-screen stick and kick button
     highlightSelf: true     // visual: ring around your own disc
   };
 
@@ -139,6 +140,16 @@
     wash: 'Blue haze',
     stripes: 'Grey with blue stripes',
     classic: 'Classic dark stripes'
+  };
+
+  /* On-screen controls.  'auto' follows the pointer — a finger brings them
+     out, a mouse leaves them alone — and the other two are for anyone who
+     wants to overrule that (a touchscreen laptop, or a phone with a mouse
+     plugged in, or trying the controls out on a desktop). */
+  var TOUCH_MODES = {
+    auto: 'Auto (on for touch)',
+    on: 'On',
+    off: 'Off'
   };
 
   var settings = loadSettings();
@@ -155,6 +166,7 @@
         if (key === 'chatLines') out.chatLines = clamp(Math.round(stored.chatLines), 20, 500);
         else if (key === 'avatar') out.avatar = isAvatarUrl(stored.avatar) ? stored.avatar : '';
         else if (key === 'bgTheme') out.bgTheme = BG_THEMES[stored.bgTheme] ? stored.bgTheme : 'wash';
+        else if (key === 'touch') out.touch = TOUCH_MODES[stored.touch] ? stored.touch : 'auto';
         else out[key] = stored[key];
       });
     }
@@ -178,6 +190,7 @@
     Object.keys(BG_THEMES).forEach(function (key) {
       document.body.classList.toggle('bg-' + key, key === settings.bgTheme);
     });
+    applyTouchMode();
     updateStats();
   }
 
@@ -1000,13 +1013,15 @@
    *  Input
    * --------------------------------------------------------------- */
 
+  /* Whatever is held, from wherever it is held: the keyboard, the on-screen
+     stick, or both at once. */
   function readKeys() {
     return {
-      up: !!(keys['w'] || keys['arrowup']),
-      down: !!(keys['s'] || keys['arrowdown']),
-      left: !!(keys['a'] || keys['arrowleft']),
-      right: !!(keys['d'] || keys['arrowright']),
-      kick: !!(keys['x'] || keys[' '] || keys['shift'])
+      up: !!(keys['w'] || keys['arrowup'] || touchKeys.up),
+      down: !!(keys['s'] || keys['arrowdown'] || touchKeys.down),
+      left: !!(keys['a'] || keys['arrowleft'] || touchKeys.left),
+      right: !!(keys['d'] || keys['arrowright'] || touchKeys.right),
+      kick: !!(keys['x'] || keys[' '] || keys['shift'] || touchKeys.kick)
     };
   }
 
@@ -1060,8 +1075,179 @@
 
   window.addEventListener('blur', function () {
     keys = {};
+    releaseTouches();
     pumpInput();
   });
+
+  /* --------------------------------------------------------------- *
+   *  The on-screen stick and kick button
+   * --------------------------------------------------------------- */
+
+  /* A thumb cannot press a key, but it does not have to: the stick writes
+     into `touchKeys`, readKeys merges that with the keyboard, and everything
+     downstream — the 40 ms pump, the server, the physics — carries on
+     unchanged.  The server cannot tell how the input was made.
+
+     Two fingers are the whole point (moving and kicking at once), so each
+     control remembers which pointer owns it and ignores the others. */
+  var touchKeys = { up: false, down: false, left: false, right: false, kick: false };
+  var touchSeen = false;      // a finger has touched this page at least once
+  var coarsePointer = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
+  var STICK_R = 58;           // how far the knob travels, in screen pixels
+  var STICK_DEAD = 0.28;      // of that, the slack in the middle
+  var KICK_R = 40;
+  var KNOB_R = 23;
+  var CONTROL_MARGIN = 26;
+
+  var stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
+  var kickTouch = { id: null };
+
+  function touchWanted() {
+    if (settings.touch === 'on') return true;
+    if (settings.touch === 'off') return false;
+    // Auto: a coarse pointer gives it away at load, and any real touch turns
+    // them on for good — a phone that reports itself as fine (or a browser
+    // that lies) still gets controls the moment somebody puts a finger down.
+    return coarsePointer || touchSeen;
+  }
+
+  function applyTouchMode() {
+    var on = touchWanted();
+    document.body.classList.toggle('touch-ui', on);
+    if (!on) releaseTouches();
+  }
+
+  function releaseTouches() {
+    stick.id = null;
+    stick.x = stick.y = 0;
+    kickTouch.id = null;
+    touchKeys.up = touchKeys.down = touchKeys.left = touchKeys.right = false;
+    touchKeys.kick = false;
+  }
+
+  /* Where the controls sit when nobody is holding them: bottom left for the
+     stick, bottom right for the kick.  They are only a hint — a thumb that
+     lands anywhere on its half of the pitch gets a stick of its own there,
+     which is far more forgiving than a target you have to hit. */
+  function stickHome() {
+    return { x: CONTROL_MARGIN + STICK_R, y: ch - CONTROL_MARGIN - STICK_R };
+  }
+  function kickHome() {
+    return { x: cw - CONTROL_MARGIN - KICK_R, y: ch - CONTROL_MARGIN - KICK_R };
+  }
+
+  /* The angle of the stick, quantised the way the keyboard is: eight
+     directions, no in-between.  That is what the server's input has always
+     been, so a thumb plays exactly the game a keyboard does. */
+  function setStickKeys() {
+    var d = Math.sqrt(stick.x * stick.x + stick.y * stick.y);
+    var held = d / STICK_R > STICK_DEAD;
+    var ux = held ? stick.x / d : 0;
+    var uy = held ? stick.y / d : 0;
+
+    touchKeys.up = uy < -0.38;
+    touchKeys.down = uy > 0.38;
+    touchKeys.left = ux < -0.38;
+    touchKeys.right = ux > 0.38;
+    pumpInput();
+  }
+
+  function controlStart(event) {
+    if (event.pointerType === 'touch' && !touchSeen) {
+      touchSeen = true;
+      applyTouchMode();     // in auto, the first finger brings the controls out
+    }
+    if (!touchWanted() || !inGame()) return;
+
+    var rect = canvas.getBoundingClientRect();
+    var x = event.clientX - rect.left;
+    var y = event.clientY - rect.top;
+
+    if (x < cw / 2 && stick.id === null) {
+      stick.id = event.pointerId;
+      stick.ox = x;
+      stick.oy = y;
+      stick.x = stick.y = 0;
+      setStickKeys();
+    } else if (x >= cw / 2 && kickTouch.id === null) {
+      kickTouch.id = event.pointerId;
+      touchKeys.kick = true;
+      pumpInput();
+    } else {
+      return;
+    }
+
+    // Without this a drag off the edge of the canvas would be handed to the
+    // browser as a scroll or a swipe instead of staying on the stick.
+    if (canvas.setPointerCapture) {
+      try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
+    }
+    event.preventDefault();
+  }
+
+  function controlMove(event) {
+    if (event.pointerId !== stick.id) return;
+
+    var rect = canvas.getBoundingClientRect();
+    stick.x = event.clientX - rect.left - stick.ox;
+    stick.y = event.clientY - rect.top - stick.oy;
+
+    var d = Math.sqrt(stick.x * stick.x + stick.y * stick.y);
+    if (d > STICK_R) {
+      stick.x = stick.x / d * STICK_R;
+      stick.y = stick.y / d * STICK_R;
+    }
+    setStickKeys();
+    event.preventDefault();
+  }
+
+  function controlEnd(event) {
+    if (event.pointerId === stick.id) {
+      stick.id = null;
+      stick.x = stick.y = 0;
+      touchKeys.up = touchKeys.down = touchKeys.left = touchKeys.right = false;
+      pumpInput();
+    }
+    if (event.pointerId === kickTouch.id) {
+      kickTouch.id = null;
+      touchKeys.kick = false;
+      pumpInput();
+    }
+  }
+
+  /* Drawn in screen pixels after the pitch, like the ball arrow, so the
+     controls stay the same size however far the camera is zoomed in. */
+  function drawTouchControls() {
+    if (!touchWanted()) return;
+
+    var home = stickHome();
+    var base = stick.id === null ? home : stick;
+    var held = stick.id !== null;
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = held ? 'rgba(255, 255, 255, 0.42)' : 'rgba(255, 255, 255, 0.16)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    ctx.beginPath();
+    ctx.arc(base.x, base.y, STICK_R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(base.x + stick.x, base.y + stick.y, KNOB_R, 0, Math.PI * 2);
+    ctx.fillStyle = held ? 'rgba(255, 255, 255, 0.38)' : 'rgba(255, 255, 255, 0.12)';
+    ctx.fill();
+    ctx.stroke();
+
+    var kick = kickHome();
+    var down = kickTouch.id !== null;
+    ctx.beginPath();
+    ctx.arc(kick.x, kick.y, KICK_R, 0, Math.PI * 2);
+    ctx.fillStyle = down ? 'rgba(255, 255, 255, 0.34)' : 'rgba(0, 0, 0, 0.18)';
+    ctx.fill();
+    ctx.strokeStyle = down ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.16)';
+    ctx.stroke();
+  }
 
   /* --------------------------------------------------------------- *
    *  Canvas geometry
@@ -1186,6 +1372,7 @@
     ctx.restore();
 
     if (mine) drawBallArrow(mine);
+    drawTouchControls();
   }
 
   /* My own disc from the snapshot, carried forward by its velocity the same
@@ -1734,6 +1921,17 @@
     });
     picker.value = settings.bgTheme;
 
+    // Same trick for the touch controls: one table, two loops.
+    var touchPicker = $('sTouch');
+    touchPicker.innerHTML = '';
+    Object.keys(TOUCH_MODES).forEach(function (key) {
+      var option = document.createElement('option');
+      option.value = key;
+      option.textContent = TOUCH_MODES[key];
+      touchPicker.appendChild(option);
+    });
+    touchPicker.value = settings.touch;
+
     drawAvatarPreview();
   }
 
@@ -2089,6 +2287,13 @@
       applySettings();
     });
 
+    $('sTouch').addEventListener('change', function () {
+      var picked = $('sTouch').value;
+      settings.touch = TOUCH_MODES[picked] ? picked : 'auto';
+      saveSettings();
+      applySettings();
+    });
+
     $('sAvatarFile').addEventListener('change', function () {
       var file = $('sAvatarFile').files && $('sAvatarFile').files[0];
       $('sAvatarFile').value = '';   // so choosing the same file twice still fires
@@ -2134,6 +2339,14 @@
     });
 
     canvas.addEventListener('mousedown', function () { closeChat(); });
+
+    // The on-screen controls.  Pointer events so one code path covers a
+    // finger, a pen and a mouse — which is also what lets a desktop try the
+    // touch controls out (VISUAL -> Touch controls).
+    canvas.addEventListener('pointerdown', controlStart);
+    window.addEventListener('pointermove', controlMove);
+    window.addEventListener('pointerup', controlEnd);
+    window.addEventListener('pointercancel', controlEnd);
 
     // Right-clicking a disc out on the pitch opens the same menu.  A click
     // on empty grass is left to the browser's own menu.
