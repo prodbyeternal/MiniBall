@@ -1,0 +1,460 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MiniBall</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">Mini<span>Ball</span></div>
+  <nav class="nav">
+    <a href="#" class="active">Play</a>
+    <a href="#" id="helpLink">Controls</a>
+  </nav>
+  <div class="conn" id="conn"><i></i><span id="connText">connecting…</span></div>
+</header>
+
+<main>
+
+<!-- ============================ LOBBY ============================ -->
+<section id="lobby" class="lobby">
+  <div class="bar">
+    <label class="field">
+      <span>Nickname</span>
+      <input id="nick" maxlength="16" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="grow"></div>
+    <button id="refreshBtn" class="btn">Refresh</button>
+    <button id="joinBtn" class="btn">Join Room</button>
+    <button id="createBtn" class="btn primary">Create Room</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="rooms">
+      <thead>
+        <tr>
+          <th class="c-name">Room Name</th>
+          <th class="c-players">Players</th>
+          <th class="c-map">Map</th>
+          <th class="c-pass">Pass</th>
+          <th class="c-time">Time</th>
+          <th class="c-status">Status</th>
+        </tr>
+      </thead>
+      <tbody id="roomRows"></tbody>
+    </table>
+    <p id="lobbyEmpty" class="empty">No rooms are open right now. Create one and send the 6&nbsp;character code to whoever you want to play with.</p>
+  </div>
+</section>
+
+<!-- ============================ ROOM =============================
+     The pitch fills the whole window.  Everything else — the score
+     pill, the room panel, the chat — floats on top of it.
+     ================================================================= -->
+<section id="room" class="room hidden">
+  <canvas id="pitch"></canvas>
+
+  <div class="overlay hidden" id="overlay"><span id="overlayText"></span></div>
+
+  <!-- Goal celebration: animated, in the colour of the team that scored. -->
+  <div class="goalflash hidden" id="goalFlash">
+    <div class="gf-main" id="gfMain">Red Scored!</div>
+    <div class="gf-sub" id="gfSub"></div>
+  </div>
+
+  <!-- In-game chrome: score pill, clock, corner buttons, floating chat. -->
+  <div class="game-ui" id="gameUi">
+    <div class="hud-top">
+      <div class="scorepill">
+        <span class="pill-score red" id="redScore">0</span>
+        <span class="pill-dash">-</span>
+        <span class="pill-score blue" id="blueScore">0</span>
+      </div>
+      <div class="clockbox" id="clock">--:--</div>
+    </div>
+
+    <div class="hud-right">
+      <button id="menuBtn" class="gamebtn"><span class="gicon">&#9776;</span>Menu</button>
+      <button id="settingsBtn" class="gamebtn square" title="Settings">&#9881;</button>
+    </div>
+
+    <div class="chatbox" id="chatBox">
+      <div class="log" id="chatLog"></div>
+      <div class="chat-entry">
+        <input id="chatInput" maxlength="120" autocomplete="off" spellcheck="false" placeholder="Press Enter to chat">
+      </div>
+    </div>
+  </div>
+
+  <!-- Pre-game lobby: the room panel from HaxBall's own room dialog. -->
+  <div class="waiting-ui" id="waitingUi">
+    <div class="roompanel" id="roomPanel">
+      <div class="rp-head">
+        <b id="roomName" title="Room name">Room</b>
+        <code id="roomCode" class="rp-code">------</code>
+        <span id="rpScore" class="rp-score hidden"></span>
+        <div class="grow"></div>
+        <button id="linkBtn" class="gamebtn" title="Copy an invite link for this room">&#128279;Link</button>
+        <button id="leaveBtn" class="gamebtn" title="Leave the room">&#9099;Leave</button>
+      </div>
+
+      <div class="rp-main">
+        <div class="rp-tools">
+          <button id="autoBtn" class="rp-tool" title="Fill up and even out the two teams">Auto</button>
+          <button id="randBtn" class="rp-tool" title="Shuffle everyone between Red and Blue">Rand</button>
+          <button id="lockBtn" class="rp-tool" title="Stop players from switching teams">Lock</button>
+          <button id="resetBtn" class="rp-tool" title="Reset the score">Reset</button>
+        </div>
+
+        <div class="rp-centre">
+          <div class="rp-grid">
+            <div class="rp-colhead red">Red</div>
+            <button class="rp-arrow" id="moveRight" title="Move the selected player one column to the right">&#9654;</button>
+            <div class="rp-colhead">Spectators</div>
+            <button class="rp-arrow" id="moveLeft" title="Move the selected player one column to the left">&#9664;</button>
+            <div class="rp-colhead blue">Blue</div>
+
+            <div class="rp-list" id="redList"></div>
+            <div class="rp-arrowcell"></div>
+            <div class="rp-list" id="specList"></div>
+            <div class="rp-arrowcell"></div>
+            <div class="rp-list" id="blueList"></div>
+          </div>
+
+          <div class="rp-settings">
+            <div class="rp-row">
+              <span>Time limit</span>
+              <input type="number" id="pTime" min="0" max="60" step="1" inputmode="numeric">
+              <i class="rp-hint">min, 0 = none</i>
+            </div>
+            <div class="rp-row">
+              <span>Score limit</span>
+              <input type="number" id="pScore" min="0" max="50" step="1" inputmode="numeric">
+              <i class="rp-hint">goals, 0 = none</i>
+            </div>
+            <div class="rp-row">
+              <span>Max players</span>
+              <input type="number" id="pMax" min="2" max="24" step="1" inputmode="numeric">
+              <i class="rp-hint">2 – 24</i>
+            </div>
+            <div class="rp-row">
+              <span>Stadium</span>
+              <b id="pStadium">Medium</b>
+              <button id="pickBtn" class="btn small">Pick</button>
+            </div>
+          </div>
+
+          <button id="startBtn" class="startbtn">&#9654; Start game</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stats" id="stats">
+    <div id="statPing" class="stat hidden"></div>
+    <div id="statFps" class="stat hidden"></div>
+  </div>
+</section>
+
+</main>
+
+<!-- ========================== DIALOGS ============================ -->
+
+<div id="createDialog" class="modal hidden">
+  <div class="dialog">
+    <h2>Create Room</h2>
+    <label class="field"><span>Room name</span><input id="cName" maxlength="28" placeholder="My room"></label>
+    <label class="field"><span>Password <i>(leave empty for a public room)</i></span><input id="cPass" maxlength="24" autocomplete="off"></label>
+    <div class="grid2">
+      <label class="field"><span>Max players</span>
+        <select id="cMax">
+          <option value="2">2</option>
+          <option value="4">4</option>
+          <option value="6">6</option>
+          <option value="8" selected>8</option>
+          <option value="10">10</option>
+          <option value="12">12</option>
+          <option value="16">16</option>
+          <option value="24">24</option>
+        </select>
+      </label>
+      <label class="field"><span>Map size</span>
+        <select id="cMap">
+          <option value="small">Small</option>
+          <option value="medium" selected>Medium</option>
+          <option value="big">Big</option>
+        </select>
+      </label>
+    </div>
+    <div class="grid2">
+      <label class="field"><span>Time limit</span>
+        <select id="cTime">
+          <option value="0">No limit</option>
+          <option value="3">3 minutes</option>
+          <option value="5" selected>5 minutes</option>
+          <option value="10">10 minutes</option>
+          <option value="15">15 minutes</option>
+        </select>
+      </label>
+      <label class="field"><span>Score limit</span>
+        <select id="cScore">
+          <option value="0">No limit</option>
+          <option value="3">3 goals</option>
+          <option value="5" selected>5 goals</option>
+          <option value="10">10 goals</option>
+        </select>
+      </label>
+    </div>
+    <div class="actions">
+      <button class="btn" data-close>Cancel</button>
+      <button id="cSubmit" class="btn primary">Create</button>
+    </div>
+  </div>
+</div>
+
+<div id="joinDialog" class="modal hidden">
+  <div class="dialog">
+    <h2>Join Room</h2>
+    <label class="field"><span>Room code</span><input id="joinCode" maxlength="6" spellcheck="false" placeholder="ABC123" style="text-transform:uppercase"></label>
+    <label class="field"><span>Password <i>(only if the room has one)</i></span><input id="joinPassword" maxlength="24" type="password" autocomplete="off"></label>
+    <p id="joinError" class="err hidden"></p>
+    <div class="actions">
+      <button class="btn" data-close>Cancel</button>
+      <button id="jSubmit" class="btn primary">Join</button>
+    </div>
+  </div>
+</div>
+
+<!-- In-game menu, opened from the top right corner. -->
+<div id="menuDialog" class="modal hidden">
+  <div class="dialog narrow">
+    <h2>Menu</h2>
+    <div class="menulist">
+      <button id="mResume" class="menubtn">Resume</button>
+      <button id="mSettings" class="menubtn">Settings</button>
+      <button id="mStop" class="menubtn hidden">Stop match and return to the room</button>
+      <button id="mLeave" class="menubtn danger">Leave room</button>
+    </div>
+  </div>
+</div>
+
+<!-- General / Visual settings, persisted in localStorage. -->
+<div id="settingsDialog" class="modal hidden">
+  <div class="dialog settings">
+    <h2>Settings</h2>
+    <div class="tabs">
+      <button class="tab active" data-tab="general">General</button>
+      <button class="tab" data-tab="visual">Visual</button>
+    </div>
+
+    <div class="tabpage" data-page="general">
+      <label class="srow">
+        <span>Nickname</span>
+        <input id="sNick" maxlength="16" autocomplete="off" spellcheck="false">
+      </label>
+      <label class="srow">
+        <span>Join rooms as a spectator <i>(pick a team from the room panel instead)</i></span>
+        <input type="checkbox" id="sSpec">
+      </label>
+      <label class="srow">
+        <span>Refresh the room list automatically</span>
+        <input type="checkbox" id="sAutoRefresh">
+      </label>
+      <label class="srow">
+        <span>Keep this many chat lines <i>(20 – 500)</i></span>
+        <input id="sChatLines" type="number" min="20" max="500" step="10">
+      </label>
+      <div class="srow avatar-row">
+        <span>Your ball image <i>(PNG or GIF, up to 30&nbsp;KB — replaces your number)</i></span>
+        <div class="avatar-ctl">
+          <canvas id="sAvatarPreview" width="34" height="34"></canvas>
+          <label class="btn small" for="sAvatarFile">Choose…</label>
+          <input type="file" id="sAvatarFile" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+          <button id="sAvatarClear" class="btn small" type="button">Clear</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabpage hidden" data-page="visual">
+      <label class="srow">
+        <span>Show the FPS counter</span>
+        <input type="checkbox" id="sFps">
+      </label>
+      <label class="srow">
+        <span>Show the ping counter</span>
+        <input type="checkbox" id="sPing">
+      </label>
+      <label class="srow">
+        <span>Show player names on the pitch</span>
+        <input type="checkbox" id="sNames">
+      </label>
+      <label class="srow">
+        <span>Number the players <i>(balls with an image show that instead)</i></span>
+        <input type="checkbox" id="sNumbers">
+      </label>
+      <label class="srow">
+        <span>Show chat messages during a match</span>
+        <input type="checkbox" id="sChat">
+      </label>
+      <label class="srow">
+        <span>Grass stripes</span>
+        <input type="checkbox" id="sStripes">
+      </label>
+      <label class="srow">
+        <span>Highlight the player you control</span>
+        <input type="checkbox" id="sSelf">
+      </label>
+    </div>
+
+    <div class="actions">
+      <button id="sDefaults" class="btn">Restore defaults</button>
+      <div class="grow"></div>
+      <button class="btn primary" data-close>Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stadium picker, opened from the room panel's Pick button. -->
+<div id="stadiumDialog" class="modal hidden">
+  <div class="dialog">
+    <h2>Pick stadium</h2>
+    <div class="stadiums" id="stadiumList"></div>
+    <div class="actions"><button class="btn primary" data-close>Close</button></div>
+  </div>
+</div>
+
+<div id="helpDialog" class="modal hidden">
+  <div class="dialog">
+    <h2>Controls</h2>
+    <table class="keys">
+      <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></td><td>Move — arrow keys work too</td></tr>
+      <tr><td><kbd>X</kbd> <kbd>Space</kbd></td><td>Kick — hold it to slow down and shoot harder</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>Open the chat box</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close the chat box or any dialog</td></tr>
+    </table>
+    <p class="note">Holding the kick key lowers your acceleration the way it does in HaxBall, so tap it when you want to sprint and hold it when you are lining up a shot.</p>
+    <div class="actions"><button class="btn primary" data-close>Got it</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+window.PLAYER_NICK = 'hahaha';
+window.GAME_SERVER = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.hostname + ':8080';
+</script>
+<script src="assets/game.js"></script>
+
+<script>
+/* ---- preview harness: fake socket + a driver for each view ---- */
+(function () {
+  function FakeSocket() {
+    FakeSocket.last = this;
+    this.readyState = 1;
+    this.onopen = this.onmessage = this.onclose = this.onerror = null;
+    var self = this;
+    setTimeout(function () { if (self.onopen) self.onopen(); }, 0);
+  }
+  FakeSocket.OPEN = 1;
+  FakeSocket.sent = [];
+  FakeSocket.prototype.send = function (raw) {
+    var msg = JSON.parse(raw);
+    FakeSocket.sent.push(msg);
+    if (msg.type === 'ping') FakeSocket.reply({ t: 'pong', i: msg.i });
+  };
+  FakeSocket.prototype.close = function () {};
+  FakeSocket.reply = function (obj) {
+    var s = FakeSocket.last;
+    if (s && s.onmessage) s.onmessage({ data: JSON.stringify(obj) });
+  };
+  window.WebSocket = FakeSocket;
+})();
+window.PLAYER_NICK = 'hahaha';
+window.GAME_SERVER = 'ws://preview';
+</script>
+<script src="assets/game.js"></script>
+<script>
+(function () {
+  var view = (new URLSearchParams(location.search)).get('view') || 'room';
+  var R = WebSocket.reply;
+  R({ t: 'rooms', rooms: [] });
+  var PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAO0lEQVR42u3PMREAQAgDQeQg4v0LwBAvIgXNFtdmNrXzNqm7owoAAAAAAADgHJAOpAcAAAAAAAAAzgEfxH4GiNJmoIEAAAAASUVORK5CYII=';
+  var crew = [
+    { id: 1, nick: 'hahaha', team: 'red', admin: true },
+    { id: 2, nick: 'skw1ra', team: 'red', admin: false, avatar: PNG },
+    { id: 3, nick: 'Batezo', team: 'blue', admin: false },
+    { id: 4, nick: 'Kokos', team: 'blue', admin: false },
+    { id: 5, nick: 'omni', team: 'blue', admin: false }
+  ];
+
+  if (view === 'game' || view === 'goal') {
+    R({ t: 'entered', you: 2, code: 'XK4T9M' });
+    R({ t: 'room', code: 'XK4T9M', name: "hahaha's room", map: 'medium', maxPlayers: 8,
+        timeLimit: 0, scoreLimit: 0, locked: false, teamsLocked: false, phase: 'playing',
+        players: crew });
+    R({ t: 'chat', nick: '', text: 'Hejka, hahaha. Lista komend: /help', sys: true });
+    R({ t: 'chat', nick: 'omni', text: 'good luck', team: 'blue' });
+    R({ t: 'state', ph: 'playing', sc: view === 'goal' ? [1, 1] : [0, 1], tl: 0, el: 27.4, pt: 0,
+        b: [64, 32, 1.4, 0.5],
+        p: [ [1, -300, -40, 0.4, 0, 0], [2, -150, 20, 0, 0, 1],
+             [3, 120, -80, 0, 0, 0], [4, 260, 40, 0, 0, 0], [5, 40, 90, 0, 0, 0] ] });
+    if (view === 'goal') {
+      R({ t: 'goal', team: 0, sc: [1, 1], by: { id: 1, nick: 'hahaha', team: 'red', own: false } });
+    }
+  } else {
+    R({ t: 'entered', you: 1, code: 'XK4T9M' });
+    R({ t: 'room', code: 'XK4T9M', name: "hahaha's room", map: 'medium', maxPlayers: 8,
+        timeLimit: 3, scoreLimit: 3, locked: false, teamsLocked: false, phase: 'waiting',
+        players: [
+          { id: 1, nick: 'hahaha', team: 'spec', admin: true },
+          { id: 2, nick: 'Batezo', team: 'red', admin: false },
+          { id: 3, nick: 'Kokos', team: 'blue', admin: false },
+          { id: 4, nick: 'omni', team: 'blue', admin: false },
+          { id: 5, nick: 'skw1ra', team: 'red', admin: false, avatar: PNG },
+          { id: 6, nick: 'dziub dziub', team: 'spec', admin: false }
+        ] });
+    R({ t: 'chat', nick: '', text: 'hahaha created the room', sys: true });
+    R({ t: 'chat', nick: '', text: 'Batezo joined', sys: true });
+    R({ t: 'state', ph: 'waiting', sc: [0, 0], tl: 0, el: 0, pt: 0, b: [0, 0, 0, 0], p: [] });
+    if (view === 'settings') document.getElementById('settingsBtn').click();
+    if (view === 'visual') {
+      document.getElementById('settingsBtn').click();
+      document.querySelector('.tab[data-tab=visual]').click();
+    }
+    if (view === 'drag') {
+      // Fire a real dragstart at a chip and drop it on the Red column, then
+      // report what the client sent.
+      (function () {
+        var lines = [];
+        function report(extra) {
+          var box = document.createElement('pre');
+          box.style.cssText = 'position:fixed;left:20px;top:20px;z-index:9999;background:#000;color:#0f0;'
+            + 'font:16px monospace;padding:14px;border:3px solid #0f0;max-width:640px;white-space:pre-wrap';
+          box.textContent = lines.concat(extra || []).join('\n');
+          document.body.appendChild(box);
+        }
+        try {
+          var chips = document.querySelectorAll('#blueList .rp-player');
+          var chip = chips[chips.length - 1];
+          lines.push('blue chips: ' + chips.length + '  picked: ' + (chip ? chip.textContent.trim() : 'none'));
+          var dt = new DataTransfer();
+          chip.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }));
+          document.getElementById('redList').dispatchEvent(
+            new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+          lines.push('draggable chips: ' + document.querySelectorAll('.rp-player[draggable]').length);
+          lines.push('sent: ' + JSON.stringify(WebSocket.sent.filter(function (m) { return m.type !== 'ping'; })));
+        } catch (e) {
+          lines.push('THREW: ' + e);
+        }
+        report();
+      })();
+    }
+  }
+})();
+</script>
+</body>
+</html>
