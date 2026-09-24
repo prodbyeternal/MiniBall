@@ -1040,6 +1040,39 @@ kbd {
   line-height: 1.6;
 }
 
+/* -------------------------------- about ------------------------------ */
+
+.about-p {
+  margin: 0 0 10px;
+  color: #c4c4c4;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.about-p code {
+  padding: 1px 4px;
+  background: #2b2d31;
+  border-radius: 2px;
+  color: #e6e6e6;
+  font-size: 11px;
+}
+
+.about-credit {
+  margin: 16px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid #45484d;
+  color: #8b8f96;
+  font-size: 12px;
+}
+
+.about-credit a {
+  color: #6aa9e0;
+  font-weight: bold;
+  text-decoration: none;
+}
+
+.about-credit a:hover { text-decoration: underline; }
+
 .err {
   margin: 0 0 8px;
   color: #e5877a;

@@ -2115,6 +2115,11 @@
       openModal('helpDialog');
     });
 
+    $('aboutLink').addEventListener('click', function (event) {
+      event.preventDefault();
+      openModal('aboutDialog');
+    });
+
     $('chatInput').addEventListener('keydown', function (event) {
       if (event.key === 'Escape') { closeChat(); return; }
       if (event.key !== 'Enter') return;

@@ -1619,9 +1619,12 @@ function handleAdmin(ws, msg) {
       if (!target || target === player) break;
       const address = clientAddress(target.ws);
       if (!address) break;
+      // Two players on one machine, or behind one router, share an address —
+      // and so does the admin doing the banning.  That is worth saying out
+      // loud, but it is the admin's call, not the server's: refusing here
+      // would make the ban useless to anyone playing on a home network.
       if (address === clientAddress(ws)) {
-        sendTo(ws, { t: 'error', message: 'That player is on your own connection.' });
-        break;
+        sendTo(ws, { t: 'error', message: 'Everyone on your connection is banned too, yourself included.' });
       }
       bannedAddresses.add(address);
       sendTo(target.ws, { t: 'kicked', message: 'You were banned by an admin.' });

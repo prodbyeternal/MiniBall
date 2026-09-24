@@ -14,6 +14,7 @@
   <nav class="nav">
     <a href="#" class="active">Play</a>
     <a href="#" id="helpLink">Controls</a>
+    <a href="#" id="aboutLink">About</a>
   </nav>
   <div class="conn" id="conn"><i></i><span id="connText">connecting…</span></div>
 </header>
@@ -350,6 +351,17 @@
     <p class="note">Holding the kick key lowers your acceleration the way it does in HaxBall, so tap it when you want to sprint and hold it when you are lining up a shot. The look camera turns itself on by default whenever the window is too small to show the whole pitch, and Tab overrides that either way.</p>
     <p class="note">Admins can right-click a player — on their name in the room panel, or on their ball out on the pitch — to kick, ban, move them to another team or make them an admin. You cannot use it on yourself; use the panel's own arrows for that.</p>
     <div class="actions"><button class="btn primary" data-close>Got it</button></div>
+  </div>
+</div>
+
+<div id="aboutDialog" class="modal hidden">
+  <div class="dialog">
+    <h2>About MiniBall</h2>
+    <p class="about-p">MiniBall is a browser game in the spirit of HaxBall: two teams, one ball, a small pitch and a lot of shoving. It runs on a server that owns the physics — your browser sends key presses and the server works out where everyone ends up — so every player in a room sees the same match, on the same map, at the same moment.</p>
+    <p class="about-p">Rooms open with one click and are shared by a six character code; there are no accounts and nothing to sign up for. Play on one of the built-in pitches or load your own HaxBall <code>.hbs</code> map, and the host — plus any admin they appoint — can move players between teams, kick, ban and start matches.</p>
+    <p class="about-p">It is a hobby project, and not affiliated with HaxBall or its authors: the code and the art here are original.</p>
+    <p class="about-credit">Made by <a href="https://github.com/prodbyeternal" target="_blank" rel="noopener noreferrer">eternal</a></p>
+    <div class="actions"><button class="btn primary" data-close>Close</button></div>
   </div>
 </div>
 
