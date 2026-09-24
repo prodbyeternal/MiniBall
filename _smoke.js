@@ -983,14 +983,23 @@ function testTouchControls() {
   const block = source.slice(start, source.lastIndexOf('/*', end));
 
   const body = { classes: {}, classList: { toggle: (c, on) => { body.classes[c] = !!on; } } };
+
+  // The controls are page elements, so the block reaches for them and for the
+  // pitch's place on the page; a stub for each is enough to run it.
+  const nodes = {};
+  const makeNode = () => ({ classList: { held: false, toggle(c, on) { this.held = !!on; } }, style: {} });
   const sandbox = {
     settings: { touch: 'auto' },
     cw: 800, ch: 400,
-    canvas: { getBoundingClientRect: () => ({ left: 0, top: 0 }), setPointerCapture() {} },
+    canvas: {
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 800, height: 400 }),
+      setPointerCapture() {},
+    },
     document: { body },
     window: { matchMedia: () => ({ matches: false }) },
     inGame: () => true,
     pumpInput: () => {},
+    $: id => (nodes[id] = nodes[id] || makeNode()),
     Math,
   };
 
@@ -1018,6 +1027,13 @@ function testTouchControls() {
   check('the first finger brings the controls out',
     api.touchWanted() && body.classes['touch-ui'] === true);
   check('and that finger owns the stick', api.stick.id === 1);
+
+  // The ring has to end up under the thumb, wherever that thumb landed: this
+  // is the regression that put the controls off the bottom of the screen.
+  check('the ring is centred on the finger that put it there',
+    nodes.stickBase.style.left === (100 - R) + 'px' && nodes.stickBase.style.top === (300 - R) + 'px',
+    nodes.stickBase.style.left + ',' + nodes.stickBase.style.top);
+  check('and it is marked as held', nodes.stickBase.classList.held === true);
 
   api.controlMove(ev(1, 'touch', 100 + R, 300));
   check('pushed right reads as right', held() === 'right', held());

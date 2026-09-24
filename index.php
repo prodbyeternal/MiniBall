@@ -157,6 +157,15 @@
     </div>
   </div>
 
+  <!-- On-screen controls for fingers: a thumbstick that appears wherever the
+       left thumb lands, and a kick button under the right one.  Fixed to the
+       screen rather than drawn on the pitch, and they take no touches of
+       their own — the canvas underneath reads the fingers. -->
+  <div class="touchpad" id="touchPad">
+    <div class="stick" id="stickBase"><div class="knob" id="stickKnob"></div></div>
+    <div class="kickbtn" id="kickBtn"></div>
+  </div>
+
   <div class="stats" id="stats">
     <div id="statPing" class="stat hidden"></div>
     <div id="statFps" class="stat hidden"></div>

@@ -1097,8 +1097,6 @@
   var STICK_R = 58;           // how far the knob travels, in screen pixels
   var STICK_DEAD = 0.28;      // of that, the slack in the middle
   var KICK_R = 40;
-  var KNOB_R = 23;
-  var CONTROL_MARGIN = 26;
 
   var stick = { id: null, ox: 0, oy: 0, x: 0, y: 0 };
   var kickTouch = { id: null };
@@ -1124,17 +1122,35 @@
     kickTouch.id = null;
     touchKeys.up = touchKeys.down = touchKeys.left = touchKeys.right = false;
     touchKeys.kick = false;
+    showTouches();
   }
 
-  /* Where the controls sit when nobody is holding them: bottom left for the
-     stick, bottom right for the kick.  They are only a hint — a thumb that
-     lands anywhere on its half of the pitch gets a stick of its own there,
-     which is far more forgiving than a target you have to hit. */
-  function stickHome() {
-    return { x: CONTROL_MARGIN + STICK_R, y: ch - CONTROL_MARGIN - STICK_R };
-  }
-  function kickHome() {
-    return { x: cw - CONTROL_MARGIN - KICK_R, y: ch - CONTROL_MARGIN - KICK_R };
+  /* The controls are little circles in the page rather than something drawn
+     on the pitch.  That is deliberate: "the bottom of the canvas" and "the
+     bottom of the screen" are not the same place in a phone browser — the
+     layout viewport is taller than what you can see when a URL bar has
+     retreated over it — and only the browser knows where the second one is.
+     Fixed positioning asks it instead of guessing.  They take no touches of
+     their own (pointer-events is off in the stylesheet): the pitch underneath
+     keeps reading the fingers, so there is one set of hit tests, not two. */
+  function showTouches() {
+    var stickEl = $('stickBase');
+    var held = stick.id !== null;
+
+    stickEl.classList.toggle('held', held);
+    if (held) {
+      // Held: the ring goes wherever the thumb landed.  A thumb that hits the
+      // mark it was aiming for is a thumb on a target it can miss.
+      stickEl.style.left = (stick.ox - STICK_R) + 'px';
+      stickEl.style.top = (stick.oy - STICK_R) + 'px';
+      $('stickKnob').style.transform = 'translate(' + stick.x + 'px, ' + stick.y + 'px)';
+    } else {
+      stickEl.style.left = '';
+      stickEl.style.top = '';
+      $('stickKnob').style.transform = '';
+    }
+
+    $('kickBtn').classList.toggle('held', kickTouch.id !== null);
   }
 
   /* The angle of the stick, quantised the way the keyboard is: eight
@@ -1160,17 +1176,18 @@
     }
     if (!touchWanted() || !inGame()) return;
 
+    // Which half of the pitch the finger landed on, in the same coordinates
+    // the page uses, so the ring can be parked at the exact spot.
     var rect = canvas.getBoundingClientRect();
-    var x = event.clientX - rect.left;
-    var y = event.clientY - rect.top;
+    var half = rect.left + rect.width / 2;
 
-    if (x < cw / 2 && stick.id === null) {
+    if (event.clientX < half && stick.id === null) {
       stick.id = event.pointerId;
-      stick.ox = x;
-      stick.oy = y;
+      stick.ox = event.clientX;
+      stick.oy = event.clientY;
       stick.x = stick.y = 0;
       setStickKeys();
-    } else if (x >= cw / 2 && kickTouch.id === null) {
+    } else if (event.clientX >= half && kickTouch.id === null) {
       kickTouch.id = event.pointerId;
       touchKeys.kick = true;
       pumpInput();
@@ -1183,15 +1200,15 @@
     if (canvas.setPointerCapture) {
       try { canvas.setPointerCapture(event.pointerId); } catch (e) { /* ignore */ }
     }
+    showTouches();
     event.preventDefault();
   }
 
   function controlMove(event) {
     if (event.pointerId !== stick.id) return;
 
-    var rect = canvas.getBoundingClientRect();
-    stick.x = event.clientX - rect.left - stick.ox;
-    stick.y = event.clientY - rect.top - stick.oy;
+    stick.x = event.clientX - stick.ox;
+    stick.y = event.clientY - stick.oy;
 
     var d = Math.sqrt(stick.x * stick.x + stick.y * stick.y);
     if (d > STICK_R) {
@@ -1199,6 +1216,7 @@
       stick.y = stick.y / d * STICK_R;
     }
     setStickKeys();
+    showTouches();
     event.preventDefault();
   }
 
@@ -1214,40 +1232,11 @@
       touchKeys.kick = false;
       pumpInput();
     }
+    showTouches();
   }
 
   /* Drawn in screen pixels after the pitch, like the ball arrow, so the
      controls stay the same size however far the camera is zoomed in. */
-  function drawTouchControls() {
-    if (!touchWanted()) return;
-
-    var home = stickHome();
-    var base = stick.id === null ? home : stick;
-    var held = stick.id !== null;
-
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = held ? 'rgba(255, 255, 255, 0.42)' : 'rgba(255, 255, 255, 0.16)';
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
-    ctx.beginPath();
-    ctx.arc(base.x, base.y, STICK_R, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.beginPath();
-    ctx.arc(base.x + stick.x, base.y + stick.y, KNOB_R, 0, Math.PI * 2);
-    ctx.fillStyle = held ? 'rgba(255, 255, 255, 0.38)' : 'rgba(255, 255, 255, 0.12)';
-    ctx.fill();
-    ctx.stroke();
-
-    var kick = kickHome();
-    var down = kickTouch.id !== null;
-    ctx.beginPath();
-    ctx.arc(kick.x, kick.y, KICK_R, 0, Math.PI * 2);
-    ctx.fillStyle = down ? 'rgba(255, 255, 255, 0.34)' : 'rgba(0, 0, 0, 0.18)';
-    ctx.fill();
-    ctx.strokeStyle = down ? 'rgba(255, 255, 255, 0.5)' : 'rgba(255, 255, 255, 0.16)';
-    ctx.stroke();
-  }
 
   /* --------------------------------------------------------------- *
    *  Canvas geometry
@@ -1372,7 +1361,6 @@
     ctx.restore();
 
     if (mine) drawBallArrow(mine);
-    drawTouchControls();
   }
 
   /* My own disc from the snapshot, carried forward by its velocity the same

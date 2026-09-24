@@ -338,6 +338,82 @@ body.bg-classic .room {
   display: block;
 }
 
+/* The pitch has to be as tall as the part of the window you can actually
+   see.  100vh is not that on a phone: it is the height with the browser's
+   own bars hidden, so a room sized in vh hangs off the bottom of the screen
+   and takes the goals with it.  dvh follows the bars instead. */
+@supports (height: 100dvh) {
+  body.in-room main { height: 100dvh; }
+  .room { bottom: auto; height: 100dvh; }
+}
+
+/* ------------------------- on-screen controls ------------------------ */
+
+/* Only while a match is on and the controls are wanted.  They are fixed to
+   the screen rather than drawn on the pitch, because the bottom of the
+   canvas is not the bottom of the screen in a phone browser — see
+   showTouches() in game.js. */
+.touchpad { display: none; }
+
+body.touch-ui.in-game .touchpad {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 12;
+  pointer-events: none;
+}
+
+.stick,
+.kickbtn {
+  position: fixed;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+/* At rest the stick sits where a left thumb expects to find it; a thumb that
+   lands anywhere on its half of the pitch gets a ring of its own there. */
+.stick {
+  left: 26px;
+  bottom: 26px;
+  width: 116px;
+  height: 116px;
+}
+
+/* Parked under a thumb: left/top are set inline, and taking bottom away lets
+   them be the ones that count. */
+.stick.held { bottom: auto; border-color: rgba(255, 255, 255, 0.42); }
+
+.knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  border: 2px solid rgba(255, 255, 255, 0.16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.stick.held .knob {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.38);
+}
+
+.kickbtn {
+  right: 26px;
+  bottom: 26px;
+  width: 80px;
+  height: 80px;
+}
+
+.kickbtn.held {
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.34);
+}
+
 /* With the on-screen controls out, the pitch has to stop behaving like a web
    page: no scrolling, no double-tap zoom, no long-press callout or selection
    under a thumb.  Only while they are showing, so the rest of the site keeps
